@@ -10,6 +10,23 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.init()
 pygame.display.set_caption("Ball Simulation")
 
+import pygame
+
+class Polygon:
+    def __init__(self, points, color):
+
+        if len(points) != 4:
+            raise ValueError("Il faut exactement 4 sommets pour un quadrilatère")
+        self.vertices = points
+        self.color = color
+
+    def draw(self, screen):
+
+        pygame.draw.polygon(screen, self.color, self.vertices, width=1)
+
+    def getVertices(self):
+        return self.vertices
+
 class circle:
     def __init__(self, x, y, radius, color):
         self.x = x
@@ -46,7 +63,7 @@ class ball:
         self.y += dy
 
 
-    def update(self, dt):
+    def updateCircle(self, dt):
         self.velocity.y += g * dt
         self.x += self.velocity.x * dt
         self.y += self.velocity.y * dt
@@ -59,19 +76,25 @@ class ball:
             hitbox_Ball.normalize_ip()
             self.x = cx + (cr - self.radius) * hitbox_Ball.x
             self.y = cy + (cr - self.radius) * hitbox_Ball.y
-
             self.velocity = self.velocity - 2 * (self.velocity.dot(hitbox_Ball)) * hitbox_Ball
+
+    def updatePolygon(self, dt):
+        
+
+
+
 
 ball = ball(250, 250, 20, (255, 0, 0))
 circle = circle(250, 250, 200, (0, 255, 0))
 ball.setContainer(circle)
+quad = Polygon([(100,100), (400,100), (450,300), (80,350)], (255, 255, 255))
 running = True
 while running:
     dt = clock.tick(60) / 1000
     screen.fill((0, 0, 0))
 
-    ball.update(dt)
-
+    ball.updateCircle(dt)
+    quad.draw(screen)
     ball.draw(screen)
     circle.draw(screen)
     pygame.display.flip()
