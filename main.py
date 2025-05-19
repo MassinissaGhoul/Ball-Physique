@@ -61,81 +61,110 @@ class circle:
 
 class ball:
     def __init__(self, x, y, radius, color):
-        self.x = x
-        self.y = y
+        self.x = x; self.y = y
         self.radius = radius
         self.color = color
         self.container = None
-        self.velocity = Vector2(100,0)
+        self.velocity = Vector2(100, 0)
 
     def setContainer(self, container):
         self.container = container
+
     def draw(self, screen):
-        pygame.draw.circle(screen, self.color, (self.x, self.y), self.radius)
+        pygame.draw.circle(screen, self.color,
+                           (int(self.x), int(self.y)), self.radius)
 
-    def move(self, dx, dy):
-        self.x += dx
-        self.y += dy
-
-
-    def updateCircle(self, dt):
+    def freeFall(self, dt):
         self.velocity.y += g * dt
-        self.x += self.velocity.x * dt
         self.y += self.velocity.y * dt
+        self.x += self.velocity.x * dt
+    def isInsideCircle(self):
         cr = self.container.getradius()
         cx = self.container.getx()
         cy = self.container.gety()
-        hitbox_Ball = Vector2(self.x - cx, self.y - cy)
-        hitbox_Ball_length = hitbox_Ball.length()
-        if hitbox_Ball_length + self.radius >= cr:
-            hitbox_Ball.normalize_ip()
-            self.x = cx + (cr - self.radius) * hitbox_Ball.x
-            self.y = cy + (cr - self.radius) * hitbox_Ball.y
-            self.velocity = self.velocity - 2 * (self.velocity.dot(hitbox_Ball)) * hitbox_Ball
+        dist = Vector2(self.x - cx, self.y - cy).length()
+        return dist <= (cr - self.radius)
 
-    def updatePolygon(self, dt):
-        # 1) Gravité et intégration de la vitesse
-        self.velocity.y += g * dt
-        self.x += self.velocity.x * dt
-        self.y += self.velocity.y * dt
-
-        if not self.container:
-            return
-
+    def isInsidePolygon(self):
         verts = self.container.getVertices()
-        # 2) Calcul du centroïde du polygone (pour orienter les normales vers l'extérieur)
+        P = Vector2(self.x, self.y)
         cx = sum(v[0] for v in verts) / len(verts)
         cy = sum(v[1] for v in verts) / len(verts)
         centroid = Vector2(cx, cy)
 
-        P = Vector2(self.x, self.y)
         for i in range(len(verts)):
             v1 = Vector2(verts[i])
             v2 = Vector2(verts[(i+1) % len(verts)])
             edge = v2 - v1
-
             normal = Vector2(-edge.y, edge.x)
             normal.normalize_ip()
-
             if (centroid - v1).dot(normal) > 0:
                 normal = -normal
+            if (P - v1).dot(normal) > 0:
+                return False
+        return True
 
-            dist = (P - v1).dot(normal)
+    def update(self, dt):
+        if self.container is None:
+            return self.freeFall(dt)
 
-            if dist + self.radius > 0:
-                correction = dist + self.radius
-                self.x -= correction * normal.x
-                self.y -= correction * normal.y
-                P = Vector2(self.x, self.y)
+        if isinstance(self.container, circle):
+            inside = self.isInsideCircle()
+        else:
+            inside = self.isInsidePolygon()
 
-                self.velocity -= 2 * self.velocity.dot(normal) * normal
+        if not inside:
+            return self.freeFall(dt)
+
+        if isinstance(self.container, circle):
+
+            self.velocity.y += g * dt
+            self.x += self.velocity.x * dt
+            self.y += self.velocity.y * dt
+
+            cr = self.container.getradius()
+            cx = self.container.getx()
+            cy = self.container.gety()
+            hit = Vector2(self.x - cx, self.y - cy)
+            if hit.length() + self.radius >= cr:
+                hit.normalize_ip()
+                self.x = cx + (cr - self.radius) * hit.x
+                self.y = cy + (cr - self.radius) * hit.y
+                self.velocity -= 2 * (self.velocity.dot(hit)) * hit
+
+        else:
+            self.velocity.y += g * dt
+            self.x += self.velocity.x * dt
+            self.y += self.velocity.y * dt
+
+            verts = self.container.getVertices()
+            cx = sum(v[0] for v in verts) / len(verts)
+            cy = sum(v[1] for v in verts) / len(verts)
+            centroid = Vector2(cx, cy)
+            P = Vector2(self.x, self.y)
+
+            for i in range(len(verts)):
+                v1 = Vector2(verts[i])
+                v2 = Vector2(verts[(i+1) % len(verts)])
+                edge = v2 - v1
+                normal = Vector2(-edge.y, edge.x)
+                normal.normalize_ip()
+                if (centroid - v1).dot(normal) > 0:
+                    normal = -normal
+                dist = (P - v1).dot(normal)
+                if dist + self.radius > 0:
+                    corr = dist + self.radius
+                    self.x -= corr * normal.x
+                    self.y -= corr * normal.y
+                    P = Vector2(self.x, self.y)
+                    self.velocity -= 2 * self.velocity.dot(normal) * normal
 
 
 
 
 circle_container  = circle(260, 250, 200, (0, 255, 0))
 polygon_container = Polygon([(100,100),(400,100),(450,300),(80,350)], (255,255,255))
-ball_obj = ball(800, 0, 9, (255, 0, 0))
+ball_obj = ball(0, 20, 9, (255, 0, 0))
 
 choice = None
 while choice is None:
@@ -172,10 +201,7 @@ while running:
     speed = font.render("Appuyez sur 'P' pour accelerer Vitesse: " + str(int(ball_obj.velocity.length())), True, (200, 200, 200))
     screen.blit(speed, (20, 60))
 
-    if choice == 'circle':
-        ball_obj.updateCircle(dt)
-    else:
-        ball_obj.updatePolygon(dt)
+    ball_obj.update(dt)
 
     if choice == 'circle':
         circle_container.draw(screen)
@@ -194,5 +220,8 @@ while running:
                 running = False
 
             elif event.key == pygame.K_p:
-                ball_obj.velocity *= 2
+                new_vel = ball_obj.velocity * 2
+                if new_vel.length() > 1000:
+                    new_vel.scale_to_length(1000)
+                ball_obj.velocity = new_vel
 pygame.quit()
